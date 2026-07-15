@@ -1,0 +1,49 @@
+name: PANOPTES Signal Crawler
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 의존성 설치
+        run: |
+          pip install requests beautifulsoup4 googlenewsdecoder
+
+      - name: 크롤러 실행
+        run: |
+          python - <<'PYEOF'
+          from panoptes_free_crawler import snowball_crawl, save_merge
+
+          queries = [
+              ("삼성물산 신사업", "삼성물산 리테일 플랫폼 사업"),
+              ("삼성물산 재건축", "삼성물산 정비사업 재건축"),
+              ("삼성물산 임원인사", "삼성물산 인사 조직"),
+              ("삼성물산 에너지", "삼성물산 태양광 SMR 그린수소"),
+          ]
+          for seed, kw in queries:
+              results = snowball_crawl(seed_query=seed, keyword_filter=kw, max_pages=12, max_depth=2)
+              save_merge(results)
+          PYEOF
+
+      - name: 변경사항 자동 커밋
+        run: |
+          git config user.name "panoptes-bot"
+          git config user.email "actions@github.com"
+          git add data_lake.json
+          git diff --quiet --cached || git commit -m "auto: 신호 갱신 $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
