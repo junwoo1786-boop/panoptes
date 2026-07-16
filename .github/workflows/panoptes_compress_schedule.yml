@@ -1,0 +1,38 @@
+name: PANOPTES Compressor
+
+# 매주 일요일 자정(UTC) 자동 실행 + 수동 실행 버튼
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  compress:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 의존성 설치
+        run: pip install requests
+
+      - name: 압축 엔진 실행
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python panoptes_compressor.py
+
+      - name: 변경사항 자동 커밋
+        run: |
+          git config user.name "panoptes-bot"
+          git config user.email "actions@github.com"
+          git add data_lake.json
+          git diff --quiet --cached || git commit -m "auto: 압축 실행 $(date -u +'%Y-%m-%d')"
+          git push
