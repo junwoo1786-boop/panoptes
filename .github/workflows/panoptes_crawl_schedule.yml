@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 */3 * * *'
   workflow_dispatch:
+    inputs:
+      entity:
+        description: '조사 대상 (예: 삼성물산, 블랙록, 한국 무역)'
+        required: false
+        default: '삼성물산'
 
 permissions:
   contents: write
@@ -21,29 +26,20 @@ jobs:
           python-version: '3.11'
 
       - name: 의존성 설치
-        run: |
-          pip install requests beautifulsoup4 googlenewsdecoder
+        run: pip install requests beautifulsoup4 googlenewsdecoder
 
-      - name: 크롤러 실행
-        run: |
-          python - <<'PYEOF'
-          from panoptes_free_crawler import snowball_crawl, save_merge
-
-          queries = [
-              ("삼성물산 신사업", "삼성물산 리테일 플랫폼 사업"),
-              ("삼성물산 재건축", "삼성물산 정비사업 재건축"),
-              ("삼성물산 임원인사", "삼성물산 인사 조직"),
-              ("삼성물산 에너지", "삼성물산 태양광 SMR 그린수소"),
-          ]
-          for seed, kw in queries:
-              results = snowball_crawl(seed_query=seed, keyword_filter=kw, max_pages=12, max_depth=2)
-              save_merge(results)
-          PYEOF
+      - name: 자율 조사 실행
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          PANOPTES_ENTITY: ${{ github.event.inputs.entity || '삼성물산' }}
+        run: python panoptes_free_crawler.py
 
       - name: 변경사항 자동 커밋
         run: |
           git config user.name "panoptes-bot"
           git config user.email "actions@github.com"
           git add data_lake.json
-          git diff --quiet --cached || git commit -m "auto: 신호 갱신 $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git diff --quiet --cached || git commit -m "auto: 신호 갱신 [$PANOPTES_ENTITY] $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push
+        env:
+          PANOPTES_ENTITY: ${{ github.event.inputs.entity || '삼성물산' }}
